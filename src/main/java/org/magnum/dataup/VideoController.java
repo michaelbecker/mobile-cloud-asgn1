@@ -16,10 +16,12 @@ import javax.servlet.http.HttpServletResponse;
 import org.magnum.dataup.model.Video;
 import org.magnum.dataup.model.VideoStatus;
 import org.magnum.dataup.model.VideoStatus.VideoState;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -121,25 +123,35 @@ public class VideoController {
 	}
 
 	
+	@ResponseStatus(value = HttpStatus.NOT_FOUND, reason = "Video not found")
+	class VideoNotFoundException extends RuntimeException {
+		private static final long serialVersionUID = 1L;
+	}
+	
+	
+	@ResponseStatus(value = HttpStatus.NOT_FOUND, reason = "Video data not found")
+	class VideoDataNotFoundException extends RuntimeException {
+		private static final long serialVersionUID = 1L;
+	}
+	
+	
 	@RequestMapping(method = RequestMethod.POST, value = VIDEO_DATA_PATH)
 	@ResponseBody
 	public VideoStatus setVideoData(	@PathVariable(ID_PARAMETER) long id, 
-										@RequestPart(DATA_PARAMETER) MultipartFile videoData,
-										HttpServletResponse response) {
+										@RequestPart(DATA_PARAMETER) MultipartFile videoData) {
 		
 		try {
 			
 			synchronized (lock) {
 				if (!videoList.containsKey(id)) {
-					response.sendError(HttpServletResponse.SC_NOT_FOUND, "Video not found");
-					return null;
+					throw new VideoNotFoundException();
 				}
 				
 				Video v = videoList.get(id);
 				fileManager.saveVideoData(v, videoData.getInputStream());
 				return new VideoStatus(VideoState.READY);
 			}
-				
+
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -150,22 +162,20 @@ public class VideoController {
 	
 	@RequestMapping(method = RequestMethod.GET, value = VIDEO_DATA_PATH)
 	@ResponseBody
-	public void getVideoData(	@PathVariable("id") long id, 
+	public void getVideoData(	@PathVariable("id") long id,
 								HttpServletResponse response) {
 		
 		try {
 		
 			synchronized (lock) {
 				if (!videoList.containsKey(id)) {
-					response.sendError(404, "Video not found.");
-					return;
+					throw new VideoNotFoundException();
 				}
 				
 				Video v = videoList.get(id);
 				
 				if (!fileManager.hasVideoData(v)) {
-					response.sendError(404, "Video data not found.");
-					return;
+					throw new VideoDataNotFoundException();
 				}
 				
 				response.setContentType(v.getContentType());
